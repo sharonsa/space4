@@ -13,6 +13,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
 
@@ -101,33 +103,38 @@ namespace SpaceGame.Editor
             editorBtnRT.anchorMin = new Vector2(0f, 0f);
             editorBtnRT.anchorMax = new Vector2(1f, 0.25f);
 
-            // Pre-Fight panel (centered, hidden by default)
-            var pfPanel = CreatePanel(canvasGO.transform, "PreFightPanel", new Color(0.05f, 0.05f, 0.15f, 0.95f));
+            // Pre-Fight panel — full screen dark overlay, children laid out top-to-bottom
+            var pfPanel = CreatePanel(canvasGO.transform, "PreFightPanel", new Color(0.05f, 0.05f, 0.15f, 0.97f));
             var pfRT    = pfPanel.GetComponent<RectTransform>();
-            pfRT.anchorMin = new Vector2(0.2f, 0.1f);
-            pfRT.anchorMax = new Vector2(0.8f, 0.9f);
+            pfRT.anchorMin = new Vector2(0.15f, 0.05f);
+            pfRT.anchorMax = new Vector2(0.85f, 0.95f);
             pfRT.offsetMin = Vector2.zero;
             pfRT.offsetMax = Vector2.zero;
-            pfPanel.SetActive(false);
 
-            var pfTitle    = CreateTMPLabel(pfPanel.transform, "PreFightTitle",    "Intercept: Enemy", 22);
-            var pfStats    = CreateTMPLabel(pfPanel.transform, "PreFightStats",    "Stats...", 14);
-            var pfLootHint = CreateTMPLabel(pfPanel.transform, "PreFightLootHint", "Loot...",  13);
+            // Title — top 12%
+            var pfTitle = CreateTMPLabel(pfPanel.transform, "PreFightTitle", "Intercept: Enemy", 26);
+            PositionPanel(pfTitle, new Vector2(0f, 0.88f), new Vector2(1f, 1f));
 
-            // Ship visualizer area
-            var vizGO = new GameObject("PreFightVisualizer", typeof(RectTransform));
+            // Ship visualizer — upper middle 40%
+            var vizGO = new GameObject("PreFightVisualizer", typeof(RectTransform), typeof(Image));
             vizGO.transform.SetParent(pfPanel.transform, false);
+            vizGO.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.3f);
             vizGO.AddComponent<SpaceGame.UI.ShipVisualizer>();
-            var vizRT = vizGO.GetComponent<RectTransform>();
-            vizRT.anchorMin = new Vector2(0.1f, 0.35f);
-            vizRT.anchorMax = new Vector2(0.9f, 0.75f);
-            vizRT.offsetMin = Vector2.zero;
-            vizRT.offsetMax = Vector2.zero;
+            PositionPanel(vizGO, new Vector2(0.05f, 0.45f), new Vector2(0.95f, 0.87f));
 
+            // Stats — middle 15%
+            var pfStats = CreateTMPLabel(pfPanel.transform, "PreFightStats", "Stats...", 13);
+            PositionPanel(pfStats, new Vector2(0f, 0.30f), new Vector2(1f, 0.45f));
+
+            // Loot hint — lower 12%
+            var pfLootHint = CreateTMPLabel(pfPanel.transform, "PreFightLootHint", "Loot hint...", 12);
+            PositionPanel(pfLootHint, new Vector2(0f, 0.18f), new Vector2(1f, 0.30f));
+
+            // Fight / Cancel buttons — bottom 16%
             var fightBtn  = CreateButton(pfPanel.transform, "FightButton",  "FIGHT!");
             var cancelBtn = CreateButton(pfPanel.transform, "CancelButton", "Retreat");
-            PositionButton(fightBtn,  new Vector2(0.1f, 0.02f), new Vector2(0.45f, 0.18f));
-            PositionButton(cancelBtn, new Vector2(0.55f, 0.02f), new Vector2(0.9f, 0.18f));
+            PositionButton(fightBtn,  new Vector2(0.05f, 0.02f), new Vector2(0.48f, 0.17f));
+            PositionButton(cancelBtn, new Vector2(0.52f, 0.02f), new Vector2(0.95f, 0.17f));
 
             // Enemy button prefab (created as disabled child; SpaceMapManager will use it as prefab)
             // NOTE: In a real project this would be a proper prefab. For now we create a template.
@@ -140,11 +147,7 @@ namespace SpaceGame.Editor
             var mgrGO = new GameObject("SpaceMapManager");
             var mgr   = mgrGO.AddComponent<SpaceGame.UI.SpaceMapManager>();
 
-            // NOTE: Inspector references must be wired manually after scene creation,
-            // as we cannot set serialized fields on MonoBehaviours from editor scripts easily.
-            // The scene is created with all needed objects; drag-and-drop in inspector to connect.
-
-            Debug.Log("[SceneCreator] SpaceMap scene created. Wire inspector references manually.");
+            CreateEventSystem();
 
             EditorSceneManager.SaveScene(scene, $"{SCENES_PATH}/SpaceMap.unity");
         }
@@ -181,10 +184,10 @@ namespace SpaceGame.Editor
             var logLabel = CreateTMPLabel(logPanel.transform, "CombatLogText", "Combat starting...", 13);
             logLabel.GetComponent<TextMeshProUGUI>().alignment = TextAlignmentOptions.TopLeft;
 
-            // Result panel (hidden)
+            // Result panel (active in scene — CombatManager hides it at runtime)
             var resultPanel = CreatePanel(canvasGO.transform, "ResultPanel", new Color(0.05f, 0.05f, 0.15f, 0.97f));
             PositionPanel(resultPanel, new Vector2(0.2f, 0.2f), new Vector2(0.8f, 0.8f));
-            resultPanel.SetActive(false);
+            // Do NOT SetActive(false) here — children won't be findable at runtime
             CreateTMPLabel(resultPanel.transform, "ResultText", "Result", 24);
             var contBtn = CreateButton(resultPanel.transform, "ContinueButton", "Continue");
             PositionButton(contBtn, new Vector2(0.25f, 0.05f), new Vector2(0.75f, 0.25f));
@@ -192,6 +195,8 @@ namespace SpaceGame.Editor
             // CombatManager
             var mgrGO = new GameObject("CombatManager");
             mgrGO.AddComponent<SpaceGame.Combat.CombatManager>();
+
+            CreateEventSystem();
 
             EditorSceneManager.SaveScene(scene, $"{SCENES_PATH}/Combat.unity");
         }
@@ -249,6 +254,8 @@ namespace SpaceGame.Editor
             var mgrGO = new GameObject("ShipEditorManager");
             mgrGO.AddComponent<SpaceGame.UI.ShipEditorManager>();
 
+            CreateEventSystem();
+
             EditorSceneManager.SaveScene(scene, $"{SCENES_PATH}/ShipEditor.unity");
         }
 
@@ -304,6 +311,9 @@ namespace SpaceGame.Editor
             tmp.fontSize  = fontSize;
             tmp.color     = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
+            // Assign default TMP font so text is always visible
+            var defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (defaultFont != null) tmp.font = defaultFont;
             return go;
         }
 
@@ -327,6 +337,11 @@ namespace SpaceGame.Editor
 
         private static void PositionButton(GameObject go, Vector2 anchorMin, Vector2 anchorMax)
             => PositionPanel(go, anchorMin, anchorMax);
+
+        private static void CreateEventSystem()
+        {
+            var go = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+        }
     }
 }
 #endif
